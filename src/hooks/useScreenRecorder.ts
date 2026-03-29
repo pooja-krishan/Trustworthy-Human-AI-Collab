@@ -10,11 +10,21 @@ function pickMime(): string | undefined {
 
 /** Prefer browser-tab capture; the picker still lets the user choose another window if needed. */
 function displayMediaConstraints(): DisplayMediaStreamOptions {
+  // Chrome supports additional picker hints (preferCurrentTab/selfBrowserSurface/etc.).
+  // Keep them as soft hints only; the user can still choose another surface.
+  const chromeHints = {
+    preferCurrentTab: true,
+    selfBrowserSurface: 'include',
+    surfaceSwitching: 'include',
+    monitorTypeSurfaces: 'exclude',
+  } as unknown as DisplayMediaStreamOptions
+
   return {
     video: {
       displaySurface: 'browser',
     } as MediaTrackConstraints,
     audio: true,
+    ...chromeHints,
   }
 }
 
