@@ -652,6 +652,17 @@ export default function App() {
 
   const beginAfterTutorial = async () => {
     setOrderError(null)
+    let recordingStarted = false
+    // Important: request display capture immediately on user gesture (button click),
+    // before any awaited network calls. This improves Chrome tab-capture availability.
+    try {
+      await startRecording()
+      recordingStarted = true
+      log(null, 'screen_recording', { action: 'start' })
+    } catch {
+      log(null, 'screen_recording', { action: 'denied_or_failed' })
+    }
+
     let assignedOrder: CounterbalancedOrder
     try {
       const params = new URLSearchParams(window.location.search)
@@ -679,14 +690,16 @@ export default function App() {
         setLatinOrder(assignedOrder)
       }
     } catch (e) {
+      if (recordingStarted) {
+        try {
+          const blob = await stopRecording()
+          log(null, 'screen_recording', { action: 'stop_after_setup_failure', bytes: blob.size })
+        } catch {
+          /* ignore */
+        }
+      }
       setOrderError(String((e as Error).message))
       return
-    }
-    try {
-      await startRecording()
-      log(null, 'screen_recording', { action: 'start' })
-    } catch {
-      log(null, 'screen_recording', { action: 'denied_or_failed' })
     }
     taskStartMs.current[1] = Date.now()
     taskStartIso.current[1] = new Date().toISOString()
