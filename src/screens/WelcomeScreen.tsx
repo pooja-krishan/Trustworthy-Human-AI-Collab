@@ -24,7 +24,7 @@ export function WelcomeScreen({ participantId, onBeginSession }: Props) {
       </p>
       <p className="screen__warn screen__warn--soft">
         Google Chrome is recommended to complete the study. When you continue, your browser will ask what to share for the recording.
-        Choose <strong>Chrome tab</strong> so only this browser tab is recorded and not your whole screen.
+        Choose <strong>Chrome tab</strong> so only this browser tab is recorded and not your whole screen. You can uncheck the Audio option before proceeding.
       </p>
       <p className="screen__mono">Participant ID (for logging): {participantId}</p>
       <button type="button" className="btn btn--accent" onClick={() => void onBeginSession()}>
