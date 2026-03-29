@@ -314,9 +314,23 @@ app.post('/api/session', upload.any(), async (req, res) => {
   }
 })
 
+// Serve built frontend (Render / production). In local API-only runs without build output,
+// these routes are skipped and only /api/* remains active.
+const DIST = path.join(ROOT, 'dist')
+const DIST_INDEX = path.join(DIST, 'index.html')
+if (fs.existsSync(DIST_INDEX)) {
+  app.use(express.static(DIST))
+  app.get(/^\/(?!api\/).*/, (_req, res) => {
+    res.sendFile(DIST_INDEX)
+  })
+}
+
 const PORT = Number(process.env.PORT || 8787)
 const server = app.listen(PORT, () => {
   console.log(`Session API http://localhost:${PORT}  →  saving to ${DATA}`)
+  if (fs.existsSync(DIST_INDEX)) {
+    console.log(`Static app enabled from ${DIST}`)
+  }
 })
 server.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
