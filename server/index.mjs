@@ -71,6 +71,50 @@ function extractJsonText(text) {
   return t
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** True when 429 is due to free-tier daily caps — waiting won't help until quota resets or billing is on. */
+function isDailyQuota429(message) {
+  const m = String(message)
+  return m.includes('GenerateRequestsPerDay') || m.includes('PerDayPerProjectPerModel')
+}
+
+function parseRetryAfterMs(message) {
+  const m = String(message).match(/Please retry in ([\d.]+)\s*s/i)
+  if (m) {
+    const sec = parseFloat(m[1])
+    if (Number.isFinite(sec)) return Math.min(120_000, Math.max(500, Math.ceil(sec * 1000)))
+  }
+  return 15_000
+}
+
+/**
+ * Retries on RPM-style 429s using Retry-After-style hints from the error body.
+ * Does not retry when the error indicates a daily free-tier cap (enable billing or switch model / wait).
+ */
+async function generateContentWith429Retry(model, content) {
+  const maxAttempts = Math.max(1, Math.min(8, Number.parseInt(process.env.GEMINI_429_MAX_RETRIES || '4', 10) || 4))
+  let lastErr
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await model.generateContent(content)
+    } catch (e) {
+      lastErr = e
+      const msg = String(e?.message || e)
+      const is429 = msg.includes('429') || msg.includes('Too Many Requests')
+      if (!is429) throw e
+      if (isDailyQuota429(msg)) throw e
+      if (attempt === maxAttempts - 1) throw e
+      const waitMs = parseRetryAfterMs(msg)
+      console.warn(`[Gemini] 429 rate limit (attempt ${attempt + 1}/${maxAttempts}), retry in ${waitMs}ms`)
+      await sleep(waitMs)
+    }
+  }
+  throw lastErr
+}
+
 async function llmScenario(userPrompt, conditionKind, dateISO, localDateISO, localMin, context = {}) {
   if (!genAI) {
     throw new Error('LLM is required but GEMINI_API_KEY is missing.')
@@ -86,7 +130,8 @@ async function llmScenario(userPrompt, conditionKind, dateISO, localDateISO, loc
       },
     })
 
-    const result = await model.generateContent(
+    const result = await generateContentWith429Retry(
+      model,
       buildFullPlanUserMessage(userPrompt, dateISO, localDateISO, localMin, context),
     )
     const rawText = result.response.text()
@@ -116,7 +161,8 @@ async function llmBehaviorAssumptions(userPrompt, conditionKind, dateISO, localD
       responseSchema: behaviorAssumptionsResponseSchema(),
     },
   })
-  const result = await model.generateContent(
+  const result = await generateContentWith429Retry(
+    model,
     buildBehaviorAssumptionsUserMessage(
       String(userPrompt || ''),
       dateISO,
