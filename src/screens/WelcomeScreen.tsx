@@ -9,11 +9,11 @@ export function WelcomeScreen({ participantId, onBeginSession }: Props) {
       <h1 className="screen__title">Human AI Interaction Study</h1>
       <p className="screen__text">
         You will complete <strong>two</strong> planning tasks. In each task, adhere to the scenario given and generate a schedule.
-        The two scenarios intentionally differ in what planning details are shown so we can compare
-        interaction styles.
+        The two tasks use different interaction styles. In one, the system’s internal assumptions and reasoning are visible and directly editable. 
+        In the other, you will interact with the system using only natural language prompts. At the end of each task, you will be asked to answer a few questions about your experience.
       </p>
       <p className="screen__text">
-        At the end of each task, you will be asked to answer a few questions about your experience. <strong> Please do not refresh the page or close the browser during the study.</strong> Thank you for your time to complete the study.
+         <strong> Please do not refresh the page or close the browser during the study.</strong> Thank you for your time to complete the study.
       </p>
       <p className="screen__text">
         The workspace keeps your instructions at the top and the calendar in the center. Depending on the scenario,

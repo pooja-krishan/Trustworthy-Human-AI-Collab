@@ -21,6 +21,11 @@ export const LIKERT_ITEMS = [
     text: 'The interaction felt frustrating or cumbersome.',
     detailPrompt: 'Where did interaction friction show up most?',
   },
+  {
+    key: 'mentalEffort',
+    text: 'The interaction required a lot of mental effort.',
+    detailPrompt: 'What made the task feel more or less mentally demanding?',
+  },
 ] as const
 
 export type LikertKey = (typeof LIKERT_ITEMS)[number]['key']

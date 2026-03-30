@@ -158,15 +158,22 @@ function writeOrderCounter(nextSequence) {
   fs.writeFileSync(ORDER_COUNTER_FILE, JSON.stringify({ nextSequence }, null, 2), 'utf8')
 }
 
+/** Serialize order allocation so concurrent POSTs cannot read the same counter (single Node process). */
+let sessionOrderMutex = Promise.resolve()
+
 app.post('/api/session-order', (_req, res) => {
-  try {
-    const sequenceNumber = readOrderCounter()
-    writeOrderCounter(sequenceNumber + 1)
-    res.json({ sequenceNumber })
-  } catch (e) {
-    console.error(e)
-    res.status(500).json({ error: String(e?.message || e) })
-  }
+  sessionOrderMutex = sessionOrderMutex
+    .then(() => {
+      const sequenceNumber = readOrderCounter()
+      writeOrderCounter(sequenceNumber + 1)
+      res.json({ sequenceNumber })
+    })
+    .catch((e) => {
+      console.error(e)
+      if (!res.headersSent) {
+        res.status(500).json({ error: String(e?.message || e) })
+      }
+    })
 })
 
 app.post('/api/parse-plan', async (req, res) => {

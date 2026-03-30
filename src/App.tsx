@@ -215,6 +215,8 @@ export default function App() {
   const taskEndIso = useRef<Record<TaskIx, string | null>>({ 1: null, 2: null })
 
   const prevSig = useRef<Record<TaskIx, string>>({ 1: '', 2: '' })
+  /** Incremented on each calendar-driven assumption recalibration; stale responses are dropped. */
+  const recalibrateGen = useRef<Record<TaskIx, number>>({ 1: 0, 2: 0 })
   const { active: recording, start: startRecording, stop: stopRecording } = useScreenRecorder()
 
   const appendEvents = useCallback((next: LogEvent[]) => {
@@ -440,35 +442,82 @@ export default function App() {
     }))
   }
 
+  const runRecalibrateAfterCalendarChange = (
+    ti: TaskIx,
+    projectedTasks: ScenarioTask[],
+    currentAssumptions: ScenarioConfig['assumptions'],
+  ) => {
+    if (!latinOrder) return
+    recalibrateGen.current[ti] += 1
+    const gen = recalibrateGen.current[ti]
+    const promptThread =
+      tb[ti].inputText.trim() ||
+      tb[ti].promptHistory.filter(Boolean).join('\n\n---\n') ||
+      ''
+    const cond = conditionForTaskIndex(latinOrder, ti)
+    void recalibrateAssumptions(promptThread, cond, tb[ti].dateISO, projectedTasks, currentAssumptions)
+      .then(({ assumptions }) => {
+        if (recalibrateGen.current[ti] !== gen) return
+        setTb((t) => {
+          const sc = t[ti].scenario
+          if (!sc) return t
+          const same =
+            JSON.stringify(assumptions.map((a) => a.text)) ===
+            JSON.stringify(sc.assumptions.map((a) => a.text))
+          return {
+            ...t,
+            [ti]: {
+              ...t[ti],
+              scenario: { ...sc, assumptions },
+              recentUiChanges: same
+                ? t[ti].recentUiChanges
+                : appendUiChanges(t[ti].recentUiChanges, ['Assumption list updated after a calendar change.']),
+            },
+          }
+        })
+      })
+      .catch(() => {
+        /* keep local edits even if recalibration fails */
+      })
+  }
+
   const handleAddTask = (dayOffset = 0, startMin = 9 * 60) => {
     const ti = currentTaskIndex()
-    if (!ti) return
+    if (!ti || !latinOrder) return
+    const sc = tb[ti].scenario
+    if (!sc) return
+    const newTask: ScenarioTask = {
+      id: `t-user-${Date.now()}`,
+      label: 'New event',
+      dayOffset: Math.max(0, Math.min(6, Math.round(dayOffset))),
+      startMin: Math.max(0, Math.min(1439, Math.round(startMin))),
+      durationMin: 60,
+      kind: 'admin',
+      pinned: false,
+    }
+    const next: ScenarioConfig = { ...sc, tasks: [...sc.tasks, newTask] }
+    const preResult = buildPlan(next.id, next, tb[ti].assumptionStates, tb[ti].dateISO)
+    const preMerged: ScenarioConfig = preResult.scenarioPatch?.tasks
+      ? { ...next, tasks: preResult.scenarioPatch.tasks }
+      : next
+
     setTb((t) => {
-      const sc = t[ti].scenario
-      if (!sc) return t
-      const newTask: ScenarioTask = {
-        id: `t-user-${Date.now()}`,
-        label: 'New event',
-        dayOffset: Math.max(0, Math.min(6, Math.round(dayOffset))),
-        startMin: Math.max(0, Math.min(1439, Math.round(startMin))),
-        durationMin: 60,
-        kind: 'admin',
-        pinned: false,
-      }
-      const next: ScenarioConfig = { ...sc, tasks: [...sc.tasks, newTask] }
-      const result = buildPlan(next.id, next, t[ti].assumptionStates, t[ti].dateISO)
+      const sc2 = t[ti].scenario
+      if (!sc2) return t
+      const nextInner: ScenarioConfig = { ...sc2, tasks: [...sc2.tasks, newTask] }
+      const result = buildPlan(nextInner.id, nextInner, t[ti].assumptionStates, t[ti].dateISO)
       const scenarioMerged: ScenarioConfig = result.scenarioPatch?.tasks
-        ? { ...next, tasks: result.scenarioPatch.tasks }
-        : next
+        ? { ...nextInner, tasks: result.scenarioPatch.tasks }
+        : nextInner
       const uiLines = ['New event added on calendar.', ...result.changeLog]
       const sig = JSON.stringify({ blocks: result.blocks, conflicts: result.conflicts })
       const planChanged = sig !== prevSig.current[ti]
       prevSig.current[ti] = sig
       if (planChanged) {
-        log(next.id, 'plan_updated', { blockCount: result.blocks.length }, ti)
+        log(nextInner.id, 'plan_updated', { blockCount: result.blocks.length }, ti)
       }
       for (const c of result.conflicts) {
-        log(next.id, 'conflict_surfaced', { message: c }, ti)
+        log(nextInner.id, 'conflict_surfaced', { message: c }, ti)
       }
       return {
         ...t,
@@ -480,6 +529,8 @@ export default function App() {
         },
       }
     })
+
+    runRecalibrateAfterCalendarChange(ti, preMerged.tasks, sc.assumptions)
   }
 
   const submitAssumptionReject = (correction: string) => {
@@ -560,31 +611,8 @@ export default function App() {
     if (!sc) return
     const taskId = blockId.startsWith('blk-') ? blockId.slice(4) : blockId
     handleTaskChange(taskId, patch)
-    const cond = conditionForTaskIndex(latinOrder, ti)
     const projectedTasks = sc.tasks.map((x) => (x.id === taskId ? { ...x, ...patch } : x))
-    void recalibrateAssumptions(tb[ti].inputText, cond, tb[ti].dateISO, projectedTasks, sc.assumptions)
-      .then(({ assumptions }) => {
-        setTb((t) => {
-          const sc = t[ti].scenario
-          if (!sc) return t
-          const same =
-            JSON.stringify(assumptions.map((a) => a.text)) ===
-            JSON.stringify(sc.assumptions.map((a) => a.text))
-          return {
-            ...t,
-            [ti]: {
-              ...t[ti],
-              scenario: { ...sc, assumptions },
-              recentUiChanges: same
-                ? t[ti].recentUiChanges
-                : appendUiChanges(t[ti].recentUiChanges, ['Assumption list updated from calendar edits.']),
-            },
-          }
-        })
-      })
-      .catch(() => {
-        /* keep local edits even if recalibration fails */
-      })
+    runRecalibrateAfterCalendarChange(ti, projectedTasks, sc.assumptions)
   }
 
   const handleCalendarCreate = (dayOffset: number, startMin: number) => {
@@ -593,28 +621,39 @@ export default function App() {
 
   const handleCalendarDelete = (blockId: string) => {
     const ti = currentTaskIndex()
-    if (!ti) return
+    if (!ti || !latinOrder) return
     const taskId = blockId.startsWith('blk-') ? blockId.slice(4) : blockId
+    const sc = tb[ti].scenario
+    if (!sc) return
+    const next: ScenarioConfig = {
+      ...sc,
+      tasks: sc.tasks.filter((x) => x.id !== taskId),
+    }
+    const preResult = buildPlan(next.id, next, tb[ti].assumptionStates, tb[ti].dateISO)
+    const preMerged: ScenarioConfig = preResult.scenarioPatch?.tasks
+      ? { ...next, tasks: preResult.scenarioPatch.tasks }
+      : next
+
     setTb((t) => {
-      const sc = t[ti].scenario
-      if (!sc) return t
-      const next: ScenarioConfig = {
-        ...sc,
-        tasks: sc.tasks.filter((x) => x.id !== taskId),
+      const sc2 = t[ti].scenario
+      if (!sc2) return t
+      const nextInner: ScenarioConfig = {
+        ...sc2,
+        tasks: sc2.tasks.filter((x) => x.id !== taskId),
       }
-      const result = buildPlan(next.id, next, t[ti].assumptionStates, t[ti].dateISO)
+      const result = buildPlan(nextInner.id, nextInner, t[ti].assumptionStates, t[ti].dateISO)
       const scenarioMerged: ScenarioConfig = result.scenarioPatch?.tasks
-        ? { ...next, tasks: result.scenarioPatch.tasks }
-        : next
+        ? { ...nextInner, tasks: result.scenarioPatch.tasks }
+        : nextInner
       const uiLines = ['Event removed from calendar.', ...result.changeLog]
       const sig = JSON.stringify({ blocks: result.blocks, conflicts: result.conflicts })
       const planChanged = sig !== prevSig.current[ti]
       prevSig.current[ti] = sig
       if (planChanged) {
-        log(next.id, 'plan_updated', { blockCount: result.blocks.length }, ti)
+        log(nextInner.id, 'plan_updated', { blockCount: result.blocks.length }, ti)
       }
       for (const c of result.conflicts) {
-        log(next.id, 'conflict_surfaced', { message: c }, ti)
+        log(nextInner.id, 'conflict_surfaced', { message: c }, ti)
       }
       return {
         ...t,
@@ -626,6 +665,8 @@ export default function App() {
         },
       }
     })
+
+    runRecalibrateAfterCalendarChange(ti, preMerged.tasks, sc.assumptions)
   }
 
   const finishTask = () => {
@@ -719,11 +760,10 @@ export default function App() {
       sequenceNumber,
       exportedAt: new Date().toISOString(),
       task1: {
-        conditionKind: latinOrder?.[0].conditionKind ?? null,
-        taskVariant: latinOrder?.[0].taskVariant ?? null,
+        conditionKind: latinOrder?.[0]?.conditionKind ?? null,
+        taskVariant: latinOrder?.[0]?.taskVariant ?? null,
         hiddenScenarioId: tb[1].scenario?.id ?? null,
         dateISO: tb[1].dateISO,
-        userPrompt: tb[1].inputText,
         promptHistory: tb[1].promptHistory,
         recentUiChanges: tb[1].recentUiChanges,
         llmModel: tb[1].llmModel,
@@ -739,11 +779,10 @@ export default function App() {
             : null,
       },
       task2: {
-        conditionKind: latinOrder?.[1].conditionKind ?? null,
-        taskVariant: latinOrder?.[1].taskVariant ?? null,
+        conditionKind: latinOrder?.[1]?.conditionKind ?? null,
+        taskVariant: latinOrder?.[1]?.taskVariant ?? null,
         hiddenScenarioId: tb[2].scenario?.id ?? null,
         dateISO: tb[2].dateISO,
-        userPrompt: tb[2].inputText,
         promptHistory: tb[2].promptHistory,
         recentUiChanges: tb[2].recentUiChanges,
         llmModel: tb[2].llmModel,

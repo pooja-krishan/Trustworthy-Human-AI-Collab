@@ -98,7 +98,7 @@ export function FinalComparisonScreen({ values, onChange, onContinue }: Props) {
             rows={4}
             value={values.explanation}
             onChange={(e) => onChange({ ...values, explanation: e.target.value })}
-            placeholder="Share what worked better and why."
+            placeholder="Share your thoughts on what worked or didn't work and can be improved."
           />
         </div>
       </div>
