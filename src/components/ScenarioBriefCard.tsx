@@ -30,9 +30,15 @@ export function CombinedPlanningBrief({ scenario, task }: { scenario: BriefSlice
           <span className="scenario-brief__summary-main">{scenario.title}</span>
           <span className="scenario-brief__summary-sep">·</span>
           <span className="scenario-brief__summary-main">{task.title}</span>
-          <span className="scenario-brief__summary-hint">(expand for full rounds)</span>
+          <span className="scenario-brief__summary-hint scenario-brief__summary-hint--prominent">
+            Press here to expand or hide the task bar
+          </span>
         </summary>
         <div className="scenario-brief__combined-body">
+          <p className="scenario-brief__overflow-hint" role="note">
+            All task steps include <strong>five rounds</strong>. If you see less than 5 rounds,{' '}
+            <strong>scroll down</strong> in this panel for the remaining rounds before continuing.
+          </p>
           <div className="scenario-brief__chunk">
             <h3 className="scenario-brief__subtitle">{scenario.title}</h3>
             <ul className="scenario-brief__list scenario-brief__list--compact">

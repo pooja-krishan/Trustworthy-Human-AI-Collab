@@ -16,22 +16,26 @@ export function QuestionnaireBlock({ title, values, onChange, onDetailChange }: 
           <legend className="likert__q">
             {item.text} <span className="questionnaire__tag questionnaire__tag--required">Required</span>
           </legend>
-          <div className="likert__scale" role="group" aria-label={item.text}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <label key={n} className="likert__opt">
-                <input
-                  type="radio"
-                  name={`${title}-${item.key}`}
-                  checked={values.ratings[item.key] === n}
-                  onChange={() => onChange(item.key, n)}
-                />
-                <span>{n}</span>
-              </label>
-            ))}
-          </div>
-          <div className="likert__ends">
-            <span>Disagree</span>
-            <span>Agree</span>
+          <div
+            className="likert__row"
+            role="group"
+            aria-label={`${item.text}. Scale: 1 means Disagree, 5 means Agree.`}
+          >
+            <span className="likert__anchor likert__anchor--left">Disagree</span>
+            <div className="likert__scale">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <label key={n} className="likert__opt">
+                  <input
+                    type="radio"
+                    name={`${title}-${item.key}`}
+                    checked={values.ratings[item.key] === n}
+                    onChange={() => onChange(item.key, n)}
+                  />
+                  <span>{n}</span>
+                </label>
+              ))}
+            </div>
+            <span className="likert__anchor likert__anchor--right">Agree</span>
           </div>
           <label className="questionnaire__open-label" htmlFor={`${title}-${item.key}-detail`}>
             {item.detailPrompt}{' '}

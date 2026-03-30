@@ -21,7 +21,8 @@ export function QuizScreen({ afterTask, values, onChange, onDetailChange, onCont
       <h1 className="screen__title">Post-task questionnaire</h1>
       <p className="screen__text">Please answer about the planning task you just completed.</p>
       <p className="screen__text screen__text--muted">
-        Select a rating (1–5) for each statement. Text boxes are optional.
+        For each statement, choose one number: <strong>1 = Disagree</strong> through <strong>5 = Agree</strong>. The
+        labels beside the scale remind you which end is which. Text boxes below each item are optional.
       </p>
       <div className="screen--wide__scroll">
         <QuestionnaireBlock
