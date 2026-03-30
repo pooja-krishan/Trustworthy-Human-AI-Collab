@@ -6,7 +6,6 @@ import { RecentChangesPanel } from './components/RecentChangesPanel'
 import { TasksConstraintsPanel } from './components/TasksConstraintsPanel'
 import { ConflictsPanel } from './components/ConflictsPanel'
 import { WeekCalendarPanel } from './components/WeekCalendarPanel'
-import { useScreenRecorder } from './hooks/useScreenRecorder'
 import { uploadSession, parsePlan, recalibrateAssumptions, requestSessionOrder } from './lib/api'
 import { defaultStudyDateISO, studyYearBounds } from './lib/dateRange'
 import {
@@ -217,7 +216,6 @@ export default function App() {
   const prevSig = useRef<Record<TaskIx, string>>({ 1: '', 2: '' })
   /** Incremented on each calendar-driven assumption recalibration; stale responses are dropped. */
   const recalibrateGen = useRef<Record<TaskIx, number>>({ 1: 0, 2: 0 })
-  const { active: recording, start: startRecording, stop: stopRecording } = useScreenRecorder()
 
   const appendEvents = useCallback((next: LogEvent[]) => {
     setEvents((e) => [...e, ...next])
@@ -693,17 +691,6 @@ export default function App() {
 
   const beginAfterTutorial = async () => {
     setOrderError(null)
-    let recordingStarted = false
-    // Important: request display capture immediately on user gesture (button click),
-    // before any awaited network calls. This improves Chrome tab-capture availability.
-    try {
-      await startRecording()
-      recordingStarted = true
-      log(null, 'screen_recording', { action: 'start' })
-    } catch {
-      log(null, 'screen_recording', { action: 'denied_or_failed' })
-    }
-
     let assignedOrder: CounterbalancedOrder
     try {
       const params = new URLSearchParams(window.location.search)
@@ -731,14 +718,6 @@ export default function App() {
         setLatinOrder(assignedOrder)
       }
     } catch (e) {
-      if (recordingStarted) {
-        try {
-          const blob = await stopRecording()
-          log(null, 'screen_recording', { action: 'stop_after_setup_failure', bytes: blob.size })
-        } catch {
-          /* ignore */
-        }
-      }
       setOrderError(String((e as Error).message))
       return
     }
@@ -752,7 +731,7 @@ export default function App() {
     setPhase('task1')
   }
 
-  const buildSessionPayload = (recordingBlob: Blob) => {
+  const buildSessionPayload = () => {
     const meta = {
       participantId,
       latinSquareOrder: latinOrder,
@@ -801,7 +780,7 @@ export default function App() {
       questionnaireAfterTask2: q2,
       finalComparison: qFinal,
       events,
-      screenRecordingBytes: recordingBlob.size,
+      screenRecordingBytes: 0,
     }
     return meta
   }
@@ -810,16 +789,9 @@ export default function App() {
     if (sessionSaved) return
     setUploading(true)
     setUploadError(null)
-    let blob = new Blob()
+    const meta = buildSessionPayload()
     try {
-      blob = await stopRecording()
-    } catch {
-      /* ignore */
-    }
-    log(null, 'screen_recording', { action: 'stop', bytes: blob.size })
-    const meta = buildSessionPayload(blob)
-    try {
-      await uploadSession(meta, blob.size > 0 ? blob : null)
+      await uploadSession(meta, null)
       setSessionSaved(true)
     } catch (e) {
       setUploadError(String((e as Error).message))
@@ -947,7 +919,6 @@ export default function App() {
         <>
           <div className="session-bar session-bar--compact">
             <span className="session-bar__task">{taskShort}</span>
-            {recording && <span className="session-bar__rec">● Rec</span>}
             <span className="session-bar__mono">{participantId.slice(0, 8)}…</span>
           </div>
           {brief && taskBrief && ti && (
