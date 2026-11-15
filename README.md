@@ -25,7 +25,7 @@ Explore the research, implementation, and application through the following reso
 
 An overview of the research motivation, problem framing, study design, methodology, and human–AI collaboration framework.
 
-[**View Project Presentation (PDF)**](HAI Final Course Project.pdf)
+[**View Project Presentation (PDF)**](HAI_Final_Course_Project.pdf)
 
 ### 2. Research Report
 
