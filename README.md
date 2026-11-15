@@ -37,7 +37,7 @@ The complete research report covering the research background, related work, sys
 
 A walkthrough of the application demonstrating the two interaction conditions, assumption modelling, user feedback, and AI-assisted recalibration.
 
-<video src="demo-video.mp4" controls width="100%"></video>
+[![Demo Video](https://img.youtube.com/vi/Nq8qoPZRxsc/0.jpg)](https://youtu.be/Nq8qoPZRxsc)
 
 ---
 
